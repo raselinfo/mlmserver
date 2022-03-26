@@ -5,6 +5,7 @@ const app = express();
 const ObjectId = require('mongodb').ObjectId;
 const cors = require('cors');
 const fileUpload = require('express-fileupload');
+const schedule = require("node-schedule")
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -18,7 +19,7 @@ app.use(express.urlencoded({ extends: true }))
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.8djb4.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 
-
+let date = new Date()
 
 
 
@@ -72,7 +73,6 @@ async function run() {
 
 
         // call back data
-
         app.get('/callback', async (req, res) => {
             const cursor = callbackCollection.find({});
             const callback = await cursor.toArray();
@@ -85,19 +85,30 @@ async function run() {
             res.json(result);
         })
 
-
-
-
         // withdraw request data
         app.get('/withdraw-request', async (req, res) => {
             const cursor = withdrawrequestCollection.find({});
             const withdrawReq = await cursor.toArray();
             res.send(withdrawReq);
         })
+        // Get Single User Withdraw Status
+        app.get("/withdrawStateu/:email", async (req, res) => {
+            let user
+            try {
+                let { email } = req.params
+                user = await withdrawrequestCollection.find({ email: email }, { pending: false }).toArray()
+                if (!user) {
+                    return res.status(200).json({ message: "User Not Found" })
+                }
+            } catch (err) {
+                return res.status(200).json({ message: "User Not Found" })
+            }
+            res.status(201).json(user)
+        })
 
         app.post('/withdraw-request', async (req, res) => {
             try {
-                const result = await withdrawrequestCollection.insertOne(req.body)
+                const result = await withdrawrequestCollection.insertOne({ ...req.body, pending: true })
                 if (result.acknowledged) {
                     res.status(201).json({ message: 1 });
                 }
@@ -106,12 +117,19 @@ async function run() {
             }
 
         })
+        // Clear the withdraw
+        app.put("/clearwithdraw", async (req, res) => {
+            let result
+            try {
+                result = await withdrawrequestCollection.findOneAndUpdate({ email: req.body.email }, { $set: { pending: false } }, { new: true })
+            }
+            catch (err) {
+                return res.status(202).json({ message: "Server Error" })
+            }
 
+            return res.status(201).json(result)
 
-
-
-
-
+        })
 
         // users data
 
@@ -159,8 +177,8 @@ async function run() {
                 district,
                 upzilla,
                 post,
-                profilePic
-
+                profilePic,
+                email
             } = req.body
             const encodeProfilePic = profilePic.toString('base64');
             const profilePicBuffer = Buffer.from(encodeProfilePic, 'base64');
@@ -169,6 +187,7 @@ async function run() {
                 treeId: `${Date.now()}-${Math.round(Math.random() * 1E9)}`,
                 referId,
                 name,
+                email,
                 fatherName,
                 motherName,
                 nomineeName,
@@ -181,20 +200,69 @@ async function run() {
                 post,
                 phoneNumber,
                 profilePic: profilePicBuffer,
-                isValidUser: false
+                isValidUser: false,
+                date: date.toDateString(),
+                referIncom: 0
             }
+            console.log(userReq)
             const result = await clientrequestCollection.insertOne(userReq);
             res.json(result);
         });
+        // GET Refer List
+        app.get("/referList/:email", async (req, res) => {
+            try {
+                let { email } = req.params
+                let result = await clientrequestCollection.findOne({ email: email })
 
+                try {
+                    let users = await clientrequestCollection.find({ referId: result.treeId }).toArray()
+                    console.log(users)
+                    return res.status(201).json(users)
+                } catch (err) {
+                    return res.status(200).json({ message: "Not Found" })
+                }
+            } catch (err) {
+                return res.status(200).json({ message: "Not Found" })
+            }
+        })
+        // Income Report
+        app.get("/incomReport/:email", async (req, res) => {
+            let { email } = req.params
+            let totoalPaid;
+            let dailyPaid = 0;
+            try {
+                let user = await clientrequestCollection.findOne({ email: email })
+                if (!user) {
+                    return res.status(200).json({ message: "Not Found" })
+                }
+                totoalPaid = Number(user.accountType.spilt("/")[1])
+                schedule.scheduleJob('0 0 * * *', () => {
+                    dailyPaid += totoalPaid * 1 / 100
+                })
+                // Referal User
+                try {
+                    let users = await clientrequestCollection.find({ referId: user.treeId }).toArray()
+                    console.log(user)
+
+                } catch (err) {
+                    return res.status(200).json({ message: "Not Found" })
+                }
+
+            } catch (err) {
+                return res.status(200).json({ message: "Not Found" })
+            }
+
+        })
+
+        // Active User
         app.put("/activeuser", async (req, res) => {
             try {
                 const user = await clientrequestCollection.findOneAndUpdate({ _id: ObjectId(req.body.id) }, { $set: { isValidUser: true } }, { new: true });
                 if (user.ok) {
-                    res.status(201).json({ message: user.ok, isValidUser: user.value.isValidUser })
+                    return res.status(201).json({ message: user.ok, isValidUser: user.value.isValidUser })
                 }
             } catch (err) {
-                res.status(201).json({ message: "Not Updated" })
+                return res.status(200).json({ message: "Not Updated" })
             }
 
         })
@@ -229,7 +297,7 @@ async function run() {
                 console.log(err)
             }
 
-            let filterdArray =  secondTree.map(async user => {
+            let filterdArray = secondTree.map(async user => {
                 try {
                     let users = await clientrequestCollection.find({ referId: user.treeId }).toArray()
                     user.children = users
@@ -252,28 +320,12 @@ async function run() {
             ])
         })
 
-
-
-
-
-
-
-
-
-
-
-
-
-
     }
-    catch(err) {
+    catch (err) {
         // await client.close();
     }
 }
 run().catch(console.dir);
-
-
-
 
 app.get('/api', (req, res) => {
     res.send('sd-one server')
