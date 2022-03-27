@@ -106,12 +106,37 @@ async function run() {
             res.status(201).json(user)
         })
 
-        app.post('/withdraw-request', async (req, res) => {
+
+        // Withdraw Request
+        app.post('/withdraw-request/:email', async (req, res) => {
+            let email = req.params.email
+
             try {
-                const result = await withdrawrequestCollection.insertOne({ ...req.body, pending: true })
-                if (result.acknowledged) {
-                    res.status(201).json({ message: 1 });
+                const user = await clientrequestCollection.findOne({ email: email })
+                // Reset Withdraw Click
+                schedule.scheduleJob('0 0 1 * *', async () => {
+                    await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { click: 0 } })
+                })
+                if (!user) {
+                    return res.status(404).json({ message: "Not Found 1" })
                 }
+               
+                if (user.click >= 2) {
+                    return res.status(201).json({ message: 3 });
+                }
+                console.log(user)
+                try {
+                    const mainUser = await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { click: user.click + 1 } })
+
+                    const result = await withdrawrequestCollection.insertOne({ ...req.body, pending: true })
+                    if (result.acknowledged) {
+                        res.status(201).json({ message: 1 });
+                    }
+
+                } catch (err) {
+                    return res.status(200).json({ message: "click not update" })
+                }
+
             } catch (err) {
                 res.status(202).json({ message: "Request Denied" })
             }
@@ -121,7 +146,8 @@ async function run() {
         app.put("/clearwithdraw", async (req, res) => {
             let result
             try {
-                result = await withdrawrequestCollection.findOneAndUpdate({ email: req.body.email }, { $set: { pending: false } }, { new: true })
+                result = await withdrawrequestCollection.findOneAndUpdate({ _id: ObjectId(req.body.id) }, { $set: { pending: false } }, { new: true })
+                console.log(result.ok)
             }
             catch (err) {
                 return res.status(202).json({ message: "Server Error" })
@@ -130,6 +156,9 @@ async function run() {
             return res.status(201).json(result)
 
         })
+
+        // Withdraw Restricted
+
 
         // users data
 
@@ -216,7 +245,6 @@ async function run() {
 
                 try {
                     let users = await clientrequestCollection.find({ referId: result.treeId }).toArray()
-                    console.log(users)
                     return res.status(201).json(users)
                 } catch (err) {
                     return res.status(200).json({ message: "Not Found" })
@@ -228,30 +256,63 @@ async function run() {
         // Income Report
         app.get("/incomReport/:email", async (req, res) => {
             let { email } = req.params
-            let totoalPaid;
+            let totalPaid;
             let dailyPaid = 0;
+            let totalSponsorIncome = 0
+            let totalGeneration = 0
+            let totalWithdraw = 0
             try {
                 let user = await clientrequestCollection.findOne({ email: email })
                 if (!user) {
                     return res.status(200).json({ message: "Not Found" })
                 }
-                totoalPaid = Number(user.accountType.spilt("/")[1])
+                totalPaid = Number(Number(user.accountType.split("/")[1]) + user.accountType.split("/")[1] * 2 / 100)
                 schedule.scheduleJob('0 0 * * *', () => {
-                    dailyPaid += totoalPaid * 1 / 100
+                    dailyPaid += (totalPaid * 1 / 100)
                 })
                 // Referal User
                 try {
+                    // Sponsor Incom
                     let users = await clientrequestCollection.find({ referId: user.treeId }).toArray()
-                    console.log(user)
+                    users.forEach(userItem => {
+                        totalSponsorIncome += Number(userItem.accountType.split("/")[1]) * 10 / 100
+                    })
+
+                    // Generation Icom
+                    try {
+                        schedule.scheduleJob('0 0 * * *', () => {
+                            users.forEach(userItem => {
+                                totalGeneration += Number(userItem.accountType.split("/")[1]) * 1 / 100
+                            })
+                        })
+                    } catch (err) {
+                        return res.status(404).json({ message: "Not Found 1" })
+                    }
+                    // total Withdraw
+                    try {
+                        let withdrawUser = await withdrawrequestCollection.find({ email: user.email }, { pending: false }).toArray()
+                        withdrawUser.forEach(async userItem => {
+                            totalWithdraw += Number(userItem.total)
+                        })
+                    } catch (err) {
+                        return res.status(501).json({ message: "Internal Sever Error" })
+                    }
 
                 } catch (err) {
-                    return res.status(200).json({ message: "Not Found" })
+                    return res.status(404).json({ message: "Not Found 1" })
                 }
 
             } catch (err) {
-                return res.status(200).json({ message: "Not Found" })
+                return res.status(404).json({ message: "Not Found 2" })
             }
 
+            return res.status(201).json({
+                totalPaid,
+                dailyPaid,
+                totalSponsorIncome,
+                totalGeneration,
+                totalWithdraw
+            })
         })
 
         // Active User
@@ -266,13 +327,48 @@ async function run() {
             }
 
         })
-
+        // GEt All Client Request
         app.get('/client-request', async (req, res) => {
             const cursor = clientrequestCollection.find({});
             const userReq = await cursor.toArray();
             res.json(userReq);
         });
+        // Get single client request
+        app.get("/singleClient/:email", async (req, res) => {
+            let user
+            try {
+                let { email } = req.params
+                user = await clientrequestCollection.findOne({ email: email });
+                if (!user) {
+                    return res.status(404).json({ message: "User Not Found" })
+                }
+            } catch (err) {
+                return res.status(404).json({ message: "User Not Found" })
+            }
 
+            return res.status(201).json(user)
+        })
+        // Get Dashboard samary 
+        app.get("/dashboardSamary", async (req, res) => {
+            let totalClient;
+            let totalActiveClient;
+            let paymentRecived;
+            let withdrawRequest;
+            try {
+                totalClient = await (await clientrequestCollection.find().toArray()).length;
+                totalActiveClient = await (await clientrequestCollection.find({ isValidUser: true }).toArray()).length;
+                paymentRecived = await (await withdrawrequestCollection.find({ pending: false }).toArray()).length
+                withdrawRequest = await (await withdrawrequestCollection.find({ pending: true }).toArray()).length
+            } catch (err) {
+                return res.status(501).json({ message: "Internal Server Error" })
+            }
+            return res.status(201).json({
+                totalClient,
+                totalActiveClient,
+                paymentRecived,
+                withdrawRequest
+            })
+        })
 
         // Get Tree 
         app.get("/unilaveltree/:id", async (req, res) => {
