@@ -36,7 +36,9 @@ async function run() {
         const contactCollection = database.collection('contact');
         const callbackCollection = database.collection('callback');
         const withdrawrequestCollection = database.collection('withdraw-request');
-
+        const noticeCollection = database.collection('notice');
+        const purchesCollection = database.collection('purches-balance');
+        const purchesHistoryCollection = database.collection('purches-history');
         // complain data
 
         app.get('/complain', async (req, res) => {
@@ -51,9 +53,71 @@ async function run() {
             res.json(result);
         })
 
+        // notice data
+        app.get('/notice', async (req, res) => {
+            const cursor = noticeCollection.find({});
+            const notice = await cursor.toArray();
+            res.send(notice);
+        })
 
+        app.post('/notice', async (req, res) => {
+            const noticeItem = req.body;
+            const result = await noticeCollection.insertOne(noticeItem)
+            res.json(result);
+        })
+        // purches-balance data
+        app.post("/purches-balance", async (req, res) => {
+            let { givAmount, email } = req.body
+            givAmount = Number(givAmount)
+            console.log(typeof givAmount)
+            try {
+                let findUser = await purchesCollection.findOne({ email: email })
+                console.log(findUser)
+                if (findUser) {
 
+                    await purchesCollection.findOneAndUpdate({ email: email }, { $set: { givAmount: findUser.givAmount += givAmount } })
+                } else {
+                    await purchesCollection.insertOne({ givAmount, email })
+                }
+            } catch (err) {
+                return res.status(404).json({ message: "Not Found" })
+            }
+        })
 
+        // Get single punches
+        app.get("/purches-balance/:email", async (req, res) => {
+            let { email } = req.params
+            try {
+                let user = await purchesCollection.findOne({ email })
+                if (!user) {
+                    return res.status(404).json({ message: "Not Found" })
+                }
+                res.status(201).json(user)
+            } catch (err) {
+                return res.status(404).json({ message: "Not Found" })
+            }
+        })
+        // Purches History
+        app.post("/purchesHistory", async (req, res) => {
+            try {
+                let user = await purchesHistoryCollection.insertOne(req.body)
+                return res.status(200).json(user)
+            } catch (err) {
+                return res.status(500).json({ message: "Server Error" })
+
+            }
+        })
+        // Get Purches Hostory
+        app.get("/purchesHistory", async (req, res) => {
+           
+            try {
+                let user = await purchesHistoryCollection.find({}).toArray()
+               
+                return res.status(200).json(user)
+            } catch (err) {
+                return res.status(500).json({ message: "Server Error" })
+            }
+        })
         // contact data
 
         app.get('/contact', async (req, res) => {
@@ -107,20 +171,16 @@ async function run() {
         })
 
 
+
         // Withdraw Request
         app.post('/withdraw-request/:email', async (req, res) => {
             let email = req.params.email
-
             try {
                 const user = await clientrequestCollection.findOne({ email: email })
-                // Reset Withdraw Click
-                schedule.scheduleJob('0 0 1 * *', async () => {
-                    await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { click: 0 } })
-                })
                 if (!user) {
                     return res.status(404).json({ message: "Not Found 1" })
                 }
-               
+
                 if (user.click >= 2) {
                     return res.status(201).json({ message: 3 });
                 }
@@ -130,6 +190,10 @@ async function run() {
 
                     const result = await withdrawrequestCollection.insertOne({ ...req.body, pending: true })
                     if (result.acknowledged) {
+                        // Reset Withdraw Click
+                        schedule.scheduleJob('0 0 1 * *', async () => {
+                            await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { click: 0 } })
+                        })
                         res.status(201).json({ message: 1 });
                     }
 
@@ -231,9 +295,16 @@ async function run() {
                 profilePic: profilePicBuffer,
                 isValidUser: false,
                 date: date.toDateString(),
-                referIncom: 0
+                referIncom: 0,
+                click: 0,
+                dailyPaid: 0,
+                totalPaid: Number(Number(accountType.split("/")[1]) + accountType.split("/")[1] * 2 / 100),
+                totalSponsorIncome: 0,
+                totalGenerationIncom: 0,
+                totalWithdraw: 0,
+                currentBalance: Number(Number(accountType.split("/")[1]) + accountType.split("/")[1] * 2 / 100)
             }
-            console.log(userReq)
+
             const result = await clientrequestCollection.insertOne(userReq);
             res.json(result);
         });
@@ -257,7 +328,7 @@ async function run() {
         app.get("/incomReport/:email", async (req, res) => {
             let { email } = req.params
             let totalPaid;
-            let dailyPaid = 0;
+            let dailyPaid;
             let totalSponsorIncome = 0
             let totalGeneration = 0
             let totalWithdraw = 0
@@ -266,10 +337,29 @@ async function run() {
                 if (!user) {
                     return res.status(200).json({ message: "Not Found" })
                 }
-                totalPaid = Number(Number(user.accountType.split("/")[1]) + user.accountType.split("/")[1] * 2 / 100)
-                schedule.scheduleJob('0 0 * * *', () => {
-                    dailyPaid += (totalPaid * 1 / 100)
-                })
+
+                let weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()]
+
+
+                if (user.totalPaid === 0) {
+                    await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalPaid: null } })
+                    totalPaid = "Please Recharge Money"
+                } else {
+                    if (user.totalPaid === null) {
+                        totalPaid = "Please Recharge Money"
+                    } else {
+                        dailyPaid = user.dailyPaid
+                        // Daily Paid 1% of TotalPaid
+                        schedule.scheduleJob('0 0 * * *', async () => {
+                            if (weekday !== "Fri") {
+                                await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { dailyPaid: dailyPaid += (user.totalPaid * 1 / 100) } })
+                                await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalPaid: user.totalPaid -= (dailyPaid += (user.totalPaid * 1 / 100)) } })
+                            }
+                        })
+                    }
+                }
+                totalPaid = user.totalPaid
+
                 // Referal User
                 try {
                     // Sponsor Incom
@@ -277,23 +367,29 @@ async function run() {
                     users.forEach(userItem => {
                         totalSponsorIncome += Number(userItem.accountType.split("/")[1]) * 10 / 100
                     })
+                    await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalSponsorIncome: totalSponsorIncome } })
 
-                    // Generation Icom
+                    // Generation income
                     try {
-                        schedule.scheduleJob('0 0 * * *', () => {
-                            users.forEach(userItem => {
-                                totalGeneration += Number(userItem.accountType.split("/")[1]) * 1 / 100
-                            })
+                        schedule.scheduleJob('0 0 * * *', async () => {
+                            if (weekday !== "Fri") {
+                                users.forEach(userItem => {
+                                    totalGeneration += Number(userItem.accountType.split("/")[1]) * 1 / 100
+                                })
+                                await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalGenerationIncom: totalGeneration } })
+                            }
                         })
                     } catch (err) {
                         return res.status(404).json({ message: "Not Found 1" })
                     }
+                    totalGeneration = user.totalGenerationIncom
                     // total Withdraw
                     try {
-                        let withdrawUser = await withdrawrequestCollection.find({ email: user.email }, { pending: false }).toArray()
+                        let withdrawUser = await withdrawrequestCollection.find({ email: user.email, pending: false }).toArray()
                         withdrawUser.forEach(async userItem => {
                             totalWithdraw += Number(userItem.total)
                         })
+                        await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalWithdraw: totalWithdraw } })
                     } catch (err) {
                         return res.status(501).json({ message: "Internal Sever Error" })
                     }
@@ -305,7 +401,12 @@ async function run() {
             } catch (err) {
                 return res.status(404).json({ message: "Not Found 2" })
             }
-
+            let currentBalance = (dailyPaid + totalSponsorIncome + totalGeneration) - totalWithdraw
+            try {
+                await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { currentBalance: currentBalance } })
+            } catch (err) {
+                return res.status(500).json({ message: "Internal Server Erro" })
+            }
             return res.status(201).json({
                 totalPaid,
                 dailyPaid,
