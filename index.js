@@ -64,10 +64,10 @@ async function run() {
         app.post("/purches-balance", async (req, res) => {
             let { givAmount, email } = req.body
             givAmount = Number(givAmount)
-           
+
             try {
                 let findUser = await purchesCollection.findOne({ email: email })
-               
+
                 if (findUser) {
 
                     await purchesCollection.findOneAndUpdate({ email: email }, { $set: { givAmount: findUser.givAmount += givAmount } })
@@ -205,7 +205,7 @@ async function run() {
             let result
             try {
                 result = await withdrawrequestCollection.findOneAndUpdate({ _id: ObjectId(req.body.id) }, { $set: { pending: false } }, { new: true })
-                
+
             }
             catch (err) {
                 return res.status(202).json({ message: "Server Error" })
@@ -248,7 +248,7 @@ async function run() {
 
         // client req data    
         app.post('/client-request', async (req, res) => {
-           
+
             let {
                 phoneNumber,
                 accountType,
@@ -320,6 +320,7 @@ async function run() {
         })
         // Income Report
         app.get("/incomReport/:email", async (req, res) => {
+            console.log("Hi")
             let { email } = req.params
             let totalPaid;
             let dailyPaid;
@@ -466,15 +467,16 @@ async function run() {
         })
 
         // Get Tree 
-        app.get("/unilaveltree/:id", async (req, res) => {
+        app.get("/unilaveltree/:email", async (req, res) => {
             let fistUserName;
             let secondTree;
             try {
                 //    Search 1st Tree
-                let { id } = req.params
-                const firstUser = await clientrequestCollection.findOne({ _id: ObjectId(id) });
+                let { email } = req.params
+
+                const firstUser = await clientrequestCollection.findOne({ email: email });
                 if (!firstUser) {
-                    return res.status(202).json({ message: "User Not found" })
+                    return res.status(202).json({ message: "User Not found 1" })
                 }
                 fistUserName = firstUser.name
                 //   Search 2nd Tree
@@ -482,23 +484,39 @@ async function run() {
                     let secondUsers = await clientrequestCollection.find({ referId: firstUser.treeId }).toArray();
                     secondTree = secondUsers
                 } catch (err) {
-                    return res.status(202).json({ message: "User Not found" })
+                    return res.status(202).json({ message: "User Not found 2" })
                 }
             } catch (err) {
-                
+
             }
 
             let filterdArray = secondTree.map(async user => {
                 try {
                     let users = await clientrequestCollection.find({ referId: user.treeId }).toArray()
                     user.children = users
+
                 } catch (err) {
-                    return res.status(202).json({ message: "User Not found" })
+                    return res.status(202).json({ message: "User Not found 3" })
                 }
                 return user
             })
             const filtered = await Promise.all([...filterdArray])
-           
+            let firthTree = filtered[0].children.map(async item => {
+                let usersItem
+                try {
+                    usersItem = await clientrequestCollection.find({ referId: item.treeId }).toArray()
+                    item.children = usersItem
+                } catch (err) {
+                    console.log("hello")
+                    return res.status(202).json({ message: "User Not found 4" })
+                }
+
+                return item
+            })
+            await Promise.all([...firthTree])
+            
+            
+
 
             return res.status(200).json([
                 {
