@@ -7,21 +7,16 @@ const cors = require('cors');
 const fileUpload = require('express-fileupload');
 const schedule = require("node-schedule")
 const port = process.env.PORT || 5000;
-
 // middleware
 app.use(cors());
 app.use(express.json());
 app.use(fileUpload());
 app.use(express.urlencoded({ extends: true }))
 
-
-
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.8djb4.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 
 let date = new Date()
-
-
 
 
 
@@ -109,10 +104,10 @@ async function run() {
         })
         // Get Purches Hostory
         app.get("/purchesHistory", async (req, res) => {
-           
+
             try {
                 let user = await purchesHistoryCollection.find({}).toArray()
-               
+
                 return res.status(200).json(user)
             } catch (err) {
                 return res.status(500).json({ message: "Server Error" })
@@ -221,7 +216,6 @@ async function run() {
 
         })
 
-        // Withdraw Restricted
 
 
         // users data
@@ -255,6 +249,7 @@ async function run() {
 
         // client req data    
         app.post('/client-request', async (req, res) => {
+            console.log(req.body)
             let {
                 phoneNumber,
                 accountType,
@@ -273,11 +268,11 @@ async function run() {
                 profilePic,
                 email
             } = req.body
-            const encodeProfilePic = profilePic.toString('base64');
-            const profilePicBuffer = Buffer.from(encodeProfilePic, 'base64');
+            // const encodeProfilePic = profilePic.toString('base64');
+            // const profilePicBuffer = Buffer.from(encodeProfilePic, 'base64');
             const userReq = {
                 accountType,
-                treeId: `${Date.now()}-${Math.round(Math.random() * 1E9)}`,
+                treeId: `${Date.now()}${Math.round(Math.random() * 100)}`.slice(4, -5),
                 referId,
                 name,
                 email,
@@ -292,7 +287,7 @@ async function run() {
                 upzilla,
                 post,
                 phoneNumber,
-                profilePic: profilePicBuffer,
+                profilePic,
                 isValidUser: false,
                 date: date.toDateString(),
                 referIncom: 0,
