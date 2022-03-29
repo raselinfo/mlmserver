@@ -64,10 +64,10 @@ async function run() {
         app.post("/purches-balance", async (req, res) => {
             let { givAmount, email } = req.body
             givAmount = Number(givAmount)
-            console.log(typeof givAmount)
+           
             try {
                 let findUser = await purchesCollection.findOne({ email: email })
-                console.log(findUser)
+               
                 if (findUser) {
 
                     await purchesCollection.findOneAndUpdate({ email: email }, { $set: { givAmount: findUser.givAmount += givAmount } })
@@ -179,7 +179,6 @@ async function run() {
                 if (user.click >= 2) {
                     return res.status(201).json({ message: 3 });
                 }
-                console.log(user)
                 try {
                     const mainUser = await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { click: user.click + 1 } })
 
@@ -206,7 +205,7 @@ async function run() {
             let result
             try {
                 result = await withdrawrequestCollection.findOneAndUpdate({ _id: ObjectId(req.body.id) }, { $set: { pending: false } }, { new: true })
-                console.log(result.ok)
+                
             }
             catch (err) {
                 return res.status(202).json({ message: "Server Error" })
@@ -249,7 +248,7 @@ async function run() {
 
         // client req data    
         app.post('/client-request', async (req, res) => {
-            console.log(req.body)
+           
             let {
                 phoneNumber,
                 accountType,
@@ -486,7 +485,7 @@ async function run() {
                     return res.status(202).json({ message: "User Not found" })
                 }
             } catch (err) {
-                console.log(err)
+                
             }
 
             let filterdArray = secondTree.map(async user => {
@@ -499,7 +498,7 @@ async function run() {
                 return user
             })
             const filtered = await Promise.all([...filterdArray])
-            console.log(filtered)
+           
 
             return res.status(200).json([
                 {
