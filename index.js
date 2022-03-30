@@ -244,7 +244,18 @@ async function run() {
             }
             res.json({ admin: isAdmin });
         })
-
+        // Update User Information
+        app.put("/clientUpdate/:email", async (req, res) => {
+            console.log(req.body)
+            let { email } = req.params
+            let data = req.body
+            try {
+                await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { ...data, nidBirth: req.body.nid, dateOfBirth: req.body.bith } })
+            } catch (err) {
+                return res.status(500).json({ message: "internal server error" })
+            }
+            return res.json({ mssage: 1 })
+        })
 
         // client req data    
         app.post('/client-request', async (req, res) => {
@@ -372,7 +383,7 @@ async function run() {
                 }
                 totalPaid = user.totalPaid
 
-             
+
                 // Sponsor Income
                 try {
                     let sponsors = await clientrequestCollection.find({ referId: user.treeId }).toArray()
@@ -408,7 +419,7 @@ async function run() {
                                 console.log(totalGeneration)
                                 console.log(FourthGenAccountType * 1 / 100)
                                 totalGeneration += FourthGenAccountType * 1 / 100
-                               
+
                                 await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalGenerationIncom: totalGeneration } })
                             })
 
