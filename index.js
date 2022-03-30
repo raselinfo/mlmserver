@@ -267,8 +267,25 @@ async function run() {
                 profilePic,
                 email
             } = req.body
-            // const encodeProfilePic = profilePic.toString('base64');
-            // const profilePicBuffer = Buffer.from(encodeProfilePic, 'base64');
+            let totalBalancePaidByCompany = (Number(accountType.split("/")[1]) * 2 / 100)
+            let AccountType = Number(accountType.split("/")[1])
+            if (AccountType === 1000) {
+                totalBalancePaidByCompany += 2500
+
+            }
+            else if (AccountType === 3000) {
+                totalBalancePaidByCompany += 7500
+
+            }
+            else if (AccountType === 6000) {
+                totalBalancePaidByCompany += 15000
+
+            }
+            else {
+                totalBalancePaidByCompany += 50000
+
+            }
+
             const userReq = {
                 accountType,
                 treeId: `${Date.now()}${Math.round(Math.random() * 100)}`.slice(4, -5),
@@ -292,11 +309,11 @@ async function run() {
                 referIncom: 0,
                 click: 0,
                 dailyPaid: 0,
-                totalPaid: Number(Number(accountType.split("/")[1]) + accountType.split("/")[1] * 2 / 100),
+                totalPaid: totalBalancePaidByCompany,
                 totalSponsorIncome: 0,
                 totalGenerationIncom: 0,
                 totalWithdraw: 0,
-                currentBalance: Number(Number(accountType.split("/")[1]) + accountType.split("/")[1] * 2 / 100)
+                currentBalance: totalBalancePaidByCompany
             }
 
             const result = await clientrequestCollection.insertOne(userReq);
@@ -320,22 +337,22 @@ async function run() {
         })
         // Income Report
         app.get("/incomReport/:email", async (req, res) => {
-            console.log("Hi")
             let { email } = req.params
             let totalPaid;
             let dailyPaid;
             let totalSponsorIncome = 0
-            let totalGeneration = 0
             let totalWithdraw = 0
+            let totalGeneration = 0
+            let FourthGenIncome = 0
             try {
                 let user = await clientrequestCollection.findOne({ email: email })
+
                 if (!user) {
                     return res.status(200).json({ message: "Not Found" })
                 }
 
                 let weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()]
-
-
+                let AccountType = Number(user.accountType.split("/")[1])
                 if (user.totalPaid === 0) {
                     await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalPaid: null } })
                     totalPaid = "Please Recharge Money"
@@ -347,8 +364,8 @@ async function run() {
                         // Daily Paid 1% of TotalPaid
                         schedule.scheduleJob('0 0 * * *', async () => {
                             if (weekday !== "Fri") {
-                                await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { dailyPaid: dailyPaid += (user.totalPaid * 1 / 100) } })
-                                await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalPaid: user.totalPaid -= (dailyPaid += (user.totalPaid * 1 / 100)) } })
+                                await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { dailyPaid: dailyPaid += (AccountType * 1 / 100) } })
+                                await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalPaid: user.totalPaid -= (AccountType * 1 / 100) } })
                             }
                         })
                     }
@@ -357,27 +374,57 @@ async function run() {
 
                 // Referal User
                 try {
-                    // Sponsor Incom
-                    let users = await clientrequestCollection.find({ referId: user.treeId }).toArray()
-                    users.forEach(userItem => {
-                        totalSponsorIncome += Number(userItem.accountType.split("/")[1]) * 10 / 100
-                    })
-                    await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalSponsorIncome: totalSponsorIncome } })
+                    // Sponsor Income
+                    try {
+                        let sponsors = await clientrequestCollection.find({ referId: user.treeId }).toArray()
+                        // Sponsor Income 10%
+                        sponsors.forEach(async sponsor => {
+                            let SponsorAccountType = Number(sponsor.accountType.split("/")[1])
+                            totalSponsorIncome += SponsorAccountType * 10 / 100
+                            await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalSponsorIncome: totalSponsorIncome } })
+                        })
+                        // Sponsor (total income এর 10%)*10%
+
+                    } catch (err) {
+                        return res.status(501).json({ message: "Internal Sever Error" })
+                    }
 
                     // Generation income
                     try {
-                        schedule.scheduleJob('0 0 * * *', async () => {
-                            if (weekday !== "Fri") {
-                                users.forEach(userItem => {
-                                    totalGeneration += Number(userItem.accountType.split("/")[1]) * 1 / 100
-                                })
+                        // Second Generation
+                        let secondGen = await clientrequestCollection.find({ referId: user.treeId }).toArray()
+                        secondGen.forEach(async secondGenUser => {
+                            // Third Generation
+                            let thirdGen = await clientrequestCollection.find({ referId: secondGenUser.treeId }).toArray()
+                            thirdGen.forEach(async thirdGenUser => {
+                                let ThirdGenAccountType = Number(thirdGenUser.accountType.split("/")[1])
+
+                                totalGeneration = ThirdGenAccountType * 1 / 100
                                 await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalGenerationIncom: totalGeneration } })
-                            }
+                                // Fourth Generation
+                                let fourthGen = await clientrequestCollection.find({ referId: thirdGenUser.treeId }).toArray()
+                                fourthGen.forEach(async fourthGenUser => {
+                                    let FourthGenAccountType = Number(fourthGenUser.accountType.split("/")[1])
+                                    FourthGenIncome += FourthGenAccountType * 1 / 100
+                                    if (fourthGenUser.referId === thirdGenUser.treeId) {
+                                        if (thirdGenUser.referId === secondGenUser.treeId) {
+                                            await clientrequestCollection.findOneAndUpdate({ treeId: secondGenUser.treeId }, { $set: { totalGenerationIncom: FourthGenIncome } })
+                                            console.log("Second", secondGenUser)
+                                            // console.log("Third", thirdGenUser)
+                                            // console.log("Fourth", fourthGenUser)
+                                        }
+
+                                    }
+                                    // console.log(secondGenUser)
+                                    // console.log(user)
+                                    // console.log("FourthGen", fourthGenUser)
+                                })
+                            })
+
                         })
                     } catch (err) {
-                        return res.status(404).json({ message: "Not Found 1" })
+                        return res.status(501).json({ message: "Internal Sever Error" })
                     }
-                    totalGeneration = user.totalGenerationIncom
                     // total Withdraw
                     try {
                         let withdrawUser = await withdrawrequestCollection.find({ email: user.email, pending: false }).toArray()
@@ -501,7 +548,7 @@ async function run() {
                 return user
             })
             const filtered = await Promise.all([...filterdArray])
-            let firthTree = filtered[0].children.map(async item => {
+            let forthTree = filtered[0]?.children.map(async item => {
                 let usersItem
                 try {
                     usersItem = await clientrequestCollection.find({ referId: item.treeId }).toArray()
@@ -513,9 +560,11 @@ async function run() {
 
                 return item
             })
-            await Promise.all([...firthTree])
-            
-            
+            if (forthTree) {
+                await Promise.all([...forthTree])
+            }
+
+
 
 
             return res.status(200).json([
