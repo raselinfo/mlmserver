@@ -8,7 +8,14 @@ const fileUpload = require('express-fileupload');
 const schedule = require("node-schedule")
 const port = process.env.PORT || 5000;
 // middleware
-app.use(cors());
+app.use(cors(
+    {
+        "origin": "*",
+        "methods": "GET,HEAD,PUT,PATCH,POST,DELETE",
+        "preflightContinue": false,
+        "optionsSuccessStatus": 204
+    }
+));
 app.use(express.json());
 app.use(fileUpload());
 app.use(express.urlencoded({ extends: true }))
@@ -343,7 +350,7 @@ async function run() {
             let totalSponsorIncome = 0
             let totalWithdraw = 0
             let totalGeneration = 0
-            
+
             try {
                 let user = await clientrequestCollection.findOne({ email: email })
 
@@ -372,66 +379,65 @@ async function run() {
                 }
                 totalPaid = user.totalPaid
 
-                // Referal User
+             
+                // Sponsor Income
                 try {
-                    // Sponsor Income
-                    try {
-                        let sponsors = await clientrequestCollection.find({ referId: user.treeId }).toArray()
-                        // Sponsor Income 10%
-                        sponsors.forEach(async sponsor => {
-                            let SponsorAccountType = Number(sponsor.accountType.split("/")[1])
-                            totalSponsorIncome += SponsorAccountType * 10 / 100
-                            await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalSponsorIncome: totalSponsorIncome } })
-                        })
-                        // Sponsor (total income এর 10%)*10%
+                    let sponsors = await clientrequestCollection.find({ referId: user.treeId }).toArray()
+                    // Sponsor Income 10%
+                    sponsors.forEach(async sponsor => {
+                        let SponsorAccountType = Number(sponsor.accountType.split("/")[1])
+                        totalSponsorIncome += SponsorAccountType * 10 / 100
+                        await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalSponsorIncome: totalSponsorIncome } })
+                    })
+                    // Sponsor (total income এর 10%)*10%
 
-                    } catch (err) {
-                        return res.status(501).json({ message: "Internal Sever Error" })
-                    }
+                } catch (err) {
+                    return res.status(501).json({ message: "Internal Sever Error" })
+                }
 
-                    // Generation income
-                    try {
-                        // Second Generation
-                        let secondGen = await clientrequestCollection.find({ referId: user.treeId }).toArray()
-                        secondGen.forEach(async secondGenUser => {
-                            // Third Generation
-                            let thirdGen = await clientrequestCollection.find({ referId: secondGenUser.treeId }).toArray()
-                           
-                            thirdGen.forEach(async thirdGenUser => {
-                                let ThirdGenAccountType = Number(thirdGenUser.accountType.split("/")[1])
-                                totalGeneration += ThirdGenAccountType * 1 / 100
+                // Generation income
+                try {
+                    // Second Generation
+                    let secondGen = await clientrequestCollection.find({ referId: user.treeId }).toArray()
+                    secondGen.forEach(async secondGenUser => {
+                        // Third Generation
+                        let thirdGen = await clientrequestCollection.find({ referId: secondGenUser.treeId }).toArray()
+                        thirdGen.forEach(async thirdGenUser => {
+                            let ThirdGenAccountType = Number(thirdGenUser.accountType.split("/")[1])
+                            totalGeneration += ThirdGenAccountType * 1 / 100
+                            await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalGenerationIncom: totalGeneration } })
+
+
+                            // Fourth Generation
+                            let fourthGen = await clientrequestCollection.find({ referId: thirdGenUser.treeId }).toArray()
+                            fourthGen.forEach(async fourthGenUser => {
+                                let FourthGenAccountType = Number(fourthGenUser.accountType.split("/")[1])
+                                console.log(totalGeneration)
+                                console.log(FourthGenAccountType * 1 / 100)
+                                totalGeneration += FourthGenAccountType * 1 / 100
+                               
                                 await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalGenerationIncom: totalGeneration } })
-
-                                // Fourth Generation
-                                let fourthGen = await clientrequestCollection.find({ referId: thirdGenUser.treeId }).toArray()
-                                fourthGen.forEach(async fourthGenUser => {
-                                    let FourthGenAccountType = Number(fourthGenUser.accountType.split("/")[1])
-                                    console.log(totalGeneration)
-                                    console.log(FourthGenAccountType * 1 / 100)
-                                    totalGeneration += FourthGenAccountType * 1 / 100
-                                    console.log(fourthGenUser)
-                                    await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalGenerationIncom: totalGeneration } })                                    
-                                })
                             })
 
                         })
-                    } catch (err) {
-                        return res.status(501).json({ message: "Internal Sever Error" })
-                    }
-                    // total Withdraw
-                    try {
-                        let withdrawUser = await withdrawrequestCollection.find({ email: user.email, pending: false }).toArray()
-                        withdrawUser.forEach(async userItem => {
-                            totalWithdraw += Number(userItem.total)
-                        })
-                        await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalWithdraw: totalWithdraw } })
-                    } catch (err) {
-                        return res.status(501).json({ message: "Internal Sever Error" })
-                    }
 
+                    })
+                    // ThirdGen
                 } catch (err) {
-                    return res.status(404).json({ message: "Not Found 1" })
+                    return res.status(501).json({ message: "Internal Sever Error" })
                 }
+                // total Withdraw
+                try {
+                    let withdrawUser = await withdrawrequestCollection.find({ email: user.email, pending: false }).toArray()
+                    withdrawUser.forEach(async userItem => {
+                        totalWithdraw += Number(userItem.total)
+                    })
+                    await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalWithdraw: totalWithdraw } })
+                } catch (err) {
+                    return res.status(501).json({ message: "Internal Sever Error" })
+                }
+
+
 
             } catch (err) {
                 return res.status(404).json({ message: "Not Found 2" })
