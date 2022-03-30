@@ -343,7 +343,7 @@ async function run() {
             let totalSponsorIncome = 0
             let totalWithdraw = 0
             let totalGeneration = 0
-            let FourthGenIncome = 0
+            
             try {
                 let user = await clientrequestCollection.findOne({ email: email })
 
@@ -396,28 +396,21 @@ async function run() {
                         secondGen.forEach(async secondGenUser => {
                             // Third Generation
                             let thirdGen = await clientrequestCollection.find({ referId: secondGenUser.treeId }).toArray()
+                           
                             thirdGen.forEach(async thirdGenUser => {
                                 let ThirdGenAccountType = Number(thirdGenUser.accountType.split("/")[1])
-
-                                totalGeneration = ThirdGenAccountType * 1 / 100
+                                totalGeneration += ThirdGenAccountType * 1 / 100
                                 await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalGenerationIncom: totalGeneration } })
+
                                 // Fourth Generation
                                 let fourthGen = await clientrequestCollection.find({ referId: thirdGenUser.treeId }).toArray()
                                 fourthGen.forEach(async fourthGenUser => {
                                     let FourthGenAccountType = Number(fourthGenUser.accountType.split("/")[1])
-                                    FourthGenIncome += FourthGenAccountType * 1 / 100
-                                    if (fourthGenUser.referId === thirdGenUser.treeId) {
-                                        if (thirdGenUser.referId === secondGenUser.treeId) {
-                                            await clientrequestCollection.findOneAndUpdate({ treeId: secondGenUser.treeId }, { $set: { totalGenerationIncom: FourthGenIncome } })
-                                            console.log("Second", secondGenUser)
-                                            // console.log("Third", thirdGenUser)
-                                            // console.log("Fourth", fourthGenUser)
-                                        }
-
-                                    }
-                                    // console.log(secondGenUser)
-                                    // console.log(user)
-                                    // console.log("FourthGen", fourthGenUser)
+                                    console.log(totalGeneration)
+                                    console.log(FourthGenAccountType * 1 / 100)
+                                    totalGeneration += FourthGenAccountType * 1 / 100
+                                    console.log(fourthGenUser)
+                                    await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalGenerationIncom: totalGeneration } })                                    
                                 })
                             })
 
