@@ -8,12 +8,7 @@ const fileUpload = require('express-fileupload');
 const schedule = require("node-schedule")
 const port = process.env.PORT || 5000;
 // middleware
-app.use(cors({
-    "origin": "*",
-    "methods": "GET,HEAD,PUT,PATCH,POST,DELETE",
-    "preflightContinue": false,
-    "optionsSuccessStatus": 204
-}));
+app.use(cors());
 app.use(express.json());
 app.use(fileUpload());
 app.use(express.urlencoded({ extends: true }))
@@ -453,9 +448,10 @@ async function run() {
             console.log("Fourth", fourthGenarationIncom)
 
             totalGeneration += fourthGenarationIncom;
-            let companyThree = await clientrequestCollection.findOne({ treeId: secondGenUserIncom })       
-            console.log(companyThree)   
-            await clientrequestCollection.findOneAndUpdate({ treeId: companyThree.referId }, { $set: { totalGenerationIncom: fourthGenarationIncom}})
+            let companyThree = await clientrequestCollection.findOne({ treeId: secondGenUserIncom })
+            if (companyThree) {
+                await clientrequestCollection.findOneAndUpdate({ treeId: companyThree.referId }, { $set: { totalGenerationIncom: fourthGenarationIncom } })
+            }
 
             await clientrequestCollection.findOneAndUpdate({ email: user.email }, { $set: { totalGenerationIncom: totalGeneration } })
             console.log(user.email)
@@ -498,7 +494,6 @@ async function run() {
         });
         // Get single client request
         app.get("/singleClient/:email", async (req, res) => {
-            console.log(req.params)
             let user
             try {
                 let { email } = req.params
