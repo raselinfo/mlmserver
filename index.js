@@ -453,7 +453,8 @@ async function run() {
             console.log("Fourth", fourthGenarationIncom)
 
             totalGeneration += fourthGenarationIncom;
-            let companyThree = await clientrequestCollection.findOne({ treeId: secondGenUserIncom })          
+            let companyThree = await clientrequestCollection.findOne({ treeId: secondGenUserIncom })       
+            console.log(companyThree)   
             await clientrequestCollection.findOneAndUpdate({ treeId: companyThree.referId }, { $set: { totalGenerationIncom: fourthGenarationIncom}})
 
             await clientrequestCollection.findOneAndUpdate({ email: user.email }, { $set: { totalGenerationIncom: totalGeneration } })
@@ -497,6 +498,7 @@ async function run() {
         });
         // Get single client request
         app.get("/singleClient/:email", async (req, res) => {
+            console.log(req.params)
             let user
             try {
                 let { email } = req.params
