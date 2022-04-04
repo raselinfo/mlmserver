@@ -374,7 +374,7 @@ async function run() {
                     } else {
                         dailyPaid = user.dailyPaid
                         // Daily Paid 1% of TotalPaid
-                        schedule.scheduleJob('* * * * *', async () => {
+                        schedule.scheduleJob('0 0 * * *', async () => {
                             let weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()]
                             if (weekday !== "Fri") {
                                 console.log("dailyPaid")
@@ -401,7 +401,7 @@ async function run() {
                     await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalSponsorIncome: totalSponsorIncome } })
                 })
                 // Sponsor (total income এর 1%)*10%
-                schedule.scheduleJob('* * * * *', async () => {
+                schedule.scheduleJob('0 0 * * *', async () => {
                     let weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()]
                     if (weekday !== "Fri") {
                         let totalUserIncom = await clientrequestCollection.findOne({ email: email })
