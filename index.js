@@ -357,7 +357,7 @@ async function run() {
             let fourthGenarationIncom = 0
             let secondGenUserIncom;
             let user
-            let weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()]
+
             try {
                 user = await clientrequestCollection.findOne({ email: email })
                 if (!user) {
@@ -374,8 +374,10 @@ async function run() {
                     } else {
                         dailyPaid = user.dailyPaid
                         // Daily Paid 1% of TotalPaid
-                        schedule.scheduleJob('0 0 * * *', async () => {
+                        schedule.scheduleJob('* * * * *', async () => {
+                            let weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()]
                             if (weekday !== "Fri") {
+                                console.log("dailyPaid")
                                 await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { dailyPaid: dailyPaid += (AccountType * 1 / 100) } })
                                 await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalPaid: user.totalPaid -= (AccountType * 1 / 100) } })
                             }
@@ -399,6 +401,17 @@ async function run() {
                     await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalSponsorIncome: totalSponsorIncome } })
                 })
                 // Sponsor (total income এর 1%)*10%
+                schedule.scheduleJob('* * * * *', async () => {
+                    let weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()]
+                    if (weekday !== "Fri") {
+                        let totalUserIncom = await clientrequestCollection.findOne({ email: email })
+                        let totoalUserSPonsorIncom = ((totalUserIncom.dailyPaid + totalUserIncom.totalSponsorIncome + totalUserIncom.totalGenerationIncom) * 1 / 100) * 10 / 100
+                        console.log(totoalUserSPonsorIncom)
+                        await clientrequestCollection.findOneAndUpdate({ email: email }, { $set: { totalSponsorIncome: totalUserIncom.totalSponsorIncome + totoalUserSPonsorIncom } })
+
+                    }
+                })
+
 
             } catch (err) {
                 return res.status(501).json({ message: "Internal Sever Error" })
